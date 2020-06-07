@@ -47,6 +47,10 @@ imu_w = data['imu_w']
 gnss = data['gnss']
 lidar = data['lidar']
 
+# mod
+
+#mod2
+
 ################################################################################################
 # Let's plot the ground truth trajectory to see what it looks like. When you're testing your
 # code later, feel free to comment this out.
