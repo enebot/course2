@@ -47,23 +47,32 @@ imu_w = data['imu_w']
 gnss = data['gnss']
 lidar = data['lidar']
 
+#print(imu_f.data[0,:])
+
+#print (gnss.data.shape)
+#print(gnss.data[0])
+#print(gnss.t)
+
+#input(a)
+
+
 # mod
 
-#mod2
+#mod2touces
 
 ################################################################################################
 # Let's plot the ground truth trajectory to see what it looks like. When you're testing your
 # code later, feel free to comment this out.
 ################################################################################################
-gt_fig = plt.figure()
-ax = gt_fig.add_subplot(111, projection='3d')
-ax.plot(gt.p[:,0], gt.p[:,1], gt.p[:,2])
-ax.set_xlabel('x [m]')
-ax.set_ylabel('y [m]')
-ax.set_zlabel('z [m]')
-ax.set_title('Ground Truth trajectory')
-ax.set_zlim(-1, 5)
-plt.show()
+# gt_fig = plt.figure()
+# ax = gt_fig.add_subplot(111, projection='3d')
+# ax.plot(gt.p[:,0], gt.p[:,1], gt.p[:,2])
+# ax.set_xlabel('x [m]')
+# ax.set_ylabel('y [m]')
+# ax.set_zlabel('z [m]')
+# ax.set_title('Ground Truth trajectory')
+# ax.set_zlim(-1, 5)
+# plt.show()
 
 ################################################################################################
 # Remember that our LIDAR data is actually just a set of positions estimated from a separate
@@ -104,11 +113,12 @@ var_imu_f = 0.10
 var_imu_w = 0.25
 var_gnss  = 0.01
 var_lidar = 1.00
+gravity = 9.81
 
 ################################################################################################
 # We can also set up some constants that won't change for any iteration of our solver.
 ################################################################################################
-g = np.array([0, 0, -9.81])  # gravity
+g = np.array([0, 0, -gravity])  # gravity
 l_jac = np.zeros([9, 6])
 l_jac[3:, :] = np.eye(6)  # motion model noise jacobian
 h_jac = np.zeros([3, 9])
@@ -119,6 +129,7 @@ h_jac[:, :3] = np.eye(3)  # measurement model jacobian
 ################################################################################################
 # Let's set up some initial values for our ES-EKF solver.
 ################################################################################################
+
 p_est = np.zeros([imu_f.data.shape[0], 3])  # position estimates
 v_est = np.zeros([imu_f.data.shape[0], 3])  # velocity estimates
 q_est = np.zeros([imu_f.data.shape[0], 4])  # orientation estimates as quaternions
@@ -138,8 +149,11 @@ lidar_i = 0
 # Since we'll need a measurement update for both the GNSS and the LIDAR data, let's make
 # a function for it.
 ################################################################################################
+
 def measurement_update(sensor_var, p_cov_check, y_k, p_check, v_check, q_check):
     # 3.1 Compute Kalman Gain
+
+
 
     # 3.2 Compute error state
 
@@ -160,11 +174,31 @@ for k in range(1, imu_f.data.shape[0]):  # start at 1 b/c we have initial predic
 
     # 1. Update state with IMU inputs
 
+    Rotation_Mat = Quaternion(*q_est[k-1]).to_mat()
+    aux=Rotation_Mat.dot(imu_f.data[k-1]) + g    #  check the sign of g
+    p_est[k] = p_est[k-1] + delta_t * v_est[k-1] + delta_t * delta_t * aux / 2
+    v_est[k] = v_est[k-1] + delta_t * aux
+    q_est[k] = Quaternion(euler = delta_t * imu_f.data[k-1]).quat_mult_right(q_est[k-1])
+
     # 1.1 Linearize the motion model and compute Jacobians
+    F = np.eye(9)
+    imu = imu_f.data[k - 1].reshape((3, 1))
+    
+    F[0:3,3:6]=np.eye(3)*delta_t
+    F[3:6,6:9]=-Rotation_Mat.dot(-skew_symetric(imu)) * delta_t
+
 
     # 2. Propagate uncertainty
+    Q = np.eye(6)
+    Q[0:3,0:3] = var_imu_f * Q[0:3,0:3]
+    Q[3:6,3:6] = var_imu_w * Q[3:6,3:6]
+
+    Q = delta_t * delta_t * Q
+
+    p_cov[k] =   F.dot((p_cov[k-1].dot(F.T))) + l_jac.dot(Q.dot(l_jac.T))
 
     # 3. Check availability of GNSS and LIDAR measurements
+
 
     # Update states (save)
 
